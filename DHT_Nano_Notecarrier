@@ -1,0 +1,69 @@
+#include <Notecard.h>
+#include "DHT.h"
+#include <SoftwareSerial.h>
+
+#define rxPin 10
+#define txPin 11
+
+
+#define DHTPIN 2
+#define DHTTYPE DHT11
+
+#define productUID "in.ac.mace.b21me153:asset_tracker"
+
+#define serialDebug Serial
+//#define serialNotecard Serial1
+SoftwareSerial serialNotecard(rxPin,txPin);
+
+DHT dht(DHTPIN, DHTTYPE, 6);
+Notecard notecard;
+
+void setup() {
+  delay(2500);
+  serialDebug.begin(115200);
+  notecard.setDebugOutputStream(serialDebug);
+
+
+  serialDebug.println("DHTxx test!");
+  dht.begin();
+
+  pinMode(rxPin, INPUT);
+  pinMode(txPin, OUTPUT);
+  serialNotecard.begin(9600);
+  notecard.begin(serialNotecard, 9600);
+
+  J *req = notecard.newRequest("hub.set");
+  JAddStringToObject(req, "product", productUID);
+  JAddStringToObject(req, "mode", "continuous");
+  notecard.sendRequest(req);
+
+}
+
+void loop() {
+  delay(2000);
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  
+  serialDebug.print("Temperature = ");
+  serialDebug.print(t);
+  serialDebug.println(" *C");
+
+  serialDebug.print("Humidity = ");
+  serialDebug.print(h);
+  serialDebug.println(" %");
+
+  J *req = notecard.newRequest("note.add");
+  if (req != NULL) {
+    JAddStringToObject(req, "file", "sensors.qo");
+    JAddBoolToObject(req, "sync", true);
+
+    J *body = JCreateObject();
+    if (body != NULL) {
+      JAddNumberToObject(body, "temp", t);
+      JAddNumberToObject(body, "humidity", h);
+      JAddItemToObject(req, "body", body);
+    }
+
+    notecard.sendRequest(req);
+  }
+}
